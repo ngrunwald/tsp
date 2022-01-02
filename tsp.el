@@ -71,7 +71,7 @@
                                  'sort (string-to-number rtime))
                      command)))))
     (seq-let (id state output raw-command) (s-split-up-to "\s+" line 3)
-      (seq-let (label command) (tsp-parse-command raw-command)
+      (seq-let (label command) (tsp--parse-raw-command raw-command)
         (list
          (propertize id
                      'state state
