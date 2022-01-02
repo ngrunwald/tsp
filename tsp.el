@@ -37,6 +37,7 @@
 (require 'subr-x)
 
 (defcustom tsp-bin-path "tsp" "Path of the tsp executable")
+(defcustom tsp-tasks-list-buffer-name "*TSP Tasks*" "Name of the tasks list buffer")
 
 (defun tsp--parse-raw-command (s)
   (cdr (s-match "\\(?:\\[\\([^]]+\\)\\]\\)?\\(.+\\)" s)))
@@ -119,8 +120,51 @@
       (when (string= (get-text-property 0 'state id) "running")
         (auto-revert-tail-mode)))))
 
+(defun tsp--revert-tasks-list-when-existing ()
+  (when (get-buffer tsp-tasks-list-buffer-name)
+    (with-current-buffer tsp-tasks-list-buffer-name
+      (tablist-revert))))
+
+(defun tsp-clear-finished-tasks ()
+  (interactive)
+  (shell-command-to-string (s-concat tsp-bin-path " -c"))
+  (tsp--revert-tasks-list-when-existing))
+
+(defun tsp-remove-task ()
+  (interactive)
+  (let ((ids (seq-map 'car (tablist-get-marked-items))))
+    (seq-each (lambda (id) (shell-command-to-string (s-concat tsp-bin-path " -r " id)))
+              ids))
+  (tsp--revert-tasks-list-when-existing))
+
+(defun tsp-kill-task-process ()
+  (interactive)
+  (let ((ids (seq-map 'car (tablist-get-marked-items))))
+    (seq-each (lambda (id) (shell-command-to-string (s-concat tsp-bin-path " -k " id)))
+              ids))
+  (tsp--revert-tasks-list-when-existing))
+
+(defun tsp-make-task-urgent ()
+  (interactive)
+  (let ((ids (seq-map 'car (tablist-get-marked-items))))
+    (seq-each (lambda (id) (when (string= "queued" (get-text-property 0 'state id))
+                             (shell-command-to-string (s-concat tsp-bin-path " -u " id))))
+              ids))
+  (tsp--revert-tasks-list-when-existing))
+
 (defun tsp--tasks-list-refresh ()
     (setq tabulated-list-entries (tsp--tasks-list)))
+
+(defvar tsp-mode-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map [r] 'tsp-retry-task)
+    (define-key map [d] 'tsp-remove-task)
+    (define-key map [k] 'tsp-kill-task-process)
+    (define-key map [c] 'tsp-clear-finished-tasks)
+    (define-key map [f]'tsp-find-output)
+    (define-key map [U] 'tsp-make-task-urgent)
+    map)
+  "Keymap for `tsp-mode'")
 
 (define-derived-mode tsp-mode tabulated-list-mode "tsp-mode"
   "Major mode for handling tsp."
@@ -130,9 +174,9 @@
                                ("Exit" 6 t)
                                ("Duration" 10 tsp--field-sorter)
                                ("Command" 0 t)])
-  (setq tabulated-list-entries 'tsp-tasks-list)
-  (setq tabulated-list-padding 2)
-  (setq tabulated-list-sort-key nil)
+  (setq-local tabulated-list-entries 'tsp-tasks-list)
+  (setq-local tabulated-list-padding 2)
+  (setq-local tabulated-list-sort-key nil)
   (add-hook 'tabulated-list-revert-hook 'tsp--tasks-list-refresh nil t)
   (tabulated-list-init-header)
   (tablist-minor-mode)
@@ -141,7 +185,7 @@
 ;;;###autoload
 (defun tsp-list-tasks ()
   (interactive)
-  (switch-to-buffer "*TSP Tasks*")
+  (switch-to-buffer tsp-tasks-list-buffer-name)
   (tsp-mode))
 
 (provide 'tsp)
