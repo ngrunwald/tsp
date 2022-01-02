@@ -36,8 +36,21 @@
 (require 'tablist)
 (require 'subr-x)
 
-(defcustom tsp-bin-path "tsp" "Path of the tsp executable")
-(defcustom tsp-tasks-list-buffer-name "*TSP Tasks*" "Name of the tasks list buffer")
+(defgroup tsp nil
+  "tsp customization group.")
+
+(defcustom tsp-bin-path "tsp" "Path of the tsp executable"
+  :group 'tsp
+  :type 'string)
+(defcustom tsp-tasks-list-buffer-name "*TSP Tasks*" "Name of the tasks list buffer"
+  :group 'tsp
+  :type 'string)
+(defcustom tsp-dired-cp-path-bin "cp" "Path of the copy executable"
+  :group 'tsp
+  :type 'string)
+(defcustom tsp-dired-mv-path-bin "mv" "Path of the move executable"
+  :group 'tsp
+  :type 'string)
 
 (defun tsp--parse-raw-command (s)
   (cdr (s-match "\\(?:\\[\\([^]]+\\)\\]\\)?\\(.+\\)" s)))
@@ -151,6 +164,48 @@
                              (shell-command-to-string (s-concat tsp-bin-path " -u " id))))
               ids))
   (tsp--revert-tasks-list-when-existing))
+
+(defun dired-tsp--copy-cmd (sources target)
+  (format "%s %s %s%s %s %s" tsp-bin-path "-L dired-tsp-copy" tsp-dired-cp-path-bin
+          (when (not dired-recursive-copies) "" " -r")
+          (s-join " " sources) target))
+
+(defun dired-tsp--move-cmd (sources target)
+  (format "%s %s %s %s %s" tsp-bin-path "-L dired-tsp-move" tsp-dired-mv-path-bin (s-join " " sources) target))
+
+;;;###autoload
+(defun dired-tsp-do-copy (&optional arg)
+  (interactive "P")
+  (dired-tsp--do-op "Copy" 'copy 'dired-tsp--copy-cmd arg))
+
+;;;###autoload
+(defun dired-tsp-do-rename (&optional arg)
+  (interactive "P")
+  (dired-tsp--do-op "Rename" 'move 'dired-tsp--move-cmd arg))
+
+(defun dired-tsp--do-op (op-name op-symbol op-fn &optional arg)
+  (let* ((fn-list (dired-get-marked-files nil arg nil nil t))
+         (rfn-list (mapcar #'dired-make-relative fn-list))
+         (dired-one-file	; fluid variable inside dired-create-files
+          (and (consp fn-list) (null (cdr fn-list)) (car fn-list)))
+         (target-dir (dired-dwim-target-directory))
+         (default (and dired-one-file
+                       (not dired-dwim-target) ; Bug#25609
+                       (expand-file-name (file-name-nondirectory (car fn-list))
+                                         target-dir)))
+         (defaults (dired-dwim-target-defaults fn-list target-dir))
+         (target (expand-file-name ; fluid variable inside dired-create-files
+                  (minibuffer-with-setup-hook
+                      (lambda ()
+                        (set (make-local-variable 'minibuffer-default-add-function) nil)
+                        (setq minibuffer-default defaults))
+                    (dired-mark-read-file-name
+                     (format "%s %%s: "
+                             op-name)
+                     target-dir op-symbol arg rfn-list default))))
+         (cmd (funcall op-fn rfn-list target)))
+    (message "Enqueued %s in tsp: ID %s" op-name (shell-command-to-string cmd))
+    (tsp--revert-tasks-list-when-existing)))
 
 (defun tsp--tasks-list-refresh ()
     (setq tabulated-list-entries (tsp--tasks-list)))
