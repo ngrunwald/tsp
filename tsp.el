@@ -39,7 +39,7 @@
 (defcustom tsp-bin-path "tsp" "Path of the tsp executable")
 
 (defun tsp--parse-raw-command (s)
-  (car (s-match "\\(?:\\[\\([^]]+\\)\\]\\)?\\(.+\\)" s)))
+  (cdr (s-match "\\(?:\\[\\([^]]+\\)\\]\\)?\\(.+\\)" s)))
 
 (defun tsp--find-column-idx-by-name (nam)
   (seq-position tabulated-list-format nam (lambda (a b) (string= (car a) b))))
@@ -135,14 +135,14 @@
   (setq tabulated-list-sort-key nil)
   (add-hook 'tabulated-list-revert-hook 'tsp--tasks-list-refresh nil t)
   (tabulated-list-init-header)
-  (tablist-minor-mode))
+  (tablist-minor-mode)
+  (tablist-revert))
 
 ;;;###autoload
 (defun tsp-list-tasks ()
   (interactive)
   (switch-to-buffer "*TSP Tasks*")
-  (tsp-mode)
-  (tabulated-list-print t t))
+  (tsp-mode))
 
 (provide 'tsp)
 ;;; tsp.el ends here
