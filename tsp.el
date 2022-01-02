@@ -6,7 +6,7 @@
 ;; Created: 2021
 ;; Version: 0.1.0
 ;; Keywords: shell, async, queue, tsp
-;; Package-Requires: ((tablist "20200427.2205") (s "                 20210616.619") (ts "                20210813.1617"))
+;; Package-Requires: ((tablist "20200427.2205") (s "20210616.619") (ts "20210813.1617"))
 
 ;; This file is NOT part of GNU Emacs.
 
