@@ -34,11 +34,12 @@
 (require 'ts)
 (require 'tabulated-list)
 (require 'tablist)
+(require 'subr-x)
 
 (defcustom tsp-bin-path "tsp" "Path of the tsp executable")
 
 (defun tsp--parse-raw-command (s)
-  (rest (s-match "\\(?:\\[\\([^]]+\\)\\]\\)?\\(.+\\)" s)))
+  (car (s-match "\\(?:\\[\\([^]]+\\)\\]\\)?\\(.+\\)" s)))
 
 (defun tsp--find-column-idx-by-name (nam)
   (seq-position tabulated-list-format nam (lambda (a b) (string= (car a) b))))
