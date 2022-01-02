@@ -35,20 +35,23 @@
 (require 'tabulated-list)
 (require 'tablist)
 (require 'subr-x)
+(require 'dired)
+(require 'dired-aux)
+(require 'cl-lib)
 
 (defgroup tsp nil
   "tsp customization group.")
 
-(defcustom tsp-bin-path "tsp" "Path of the tsp executable"
+(defcustom tsp-program "tsp" "Name of the tsp program"
   :group 'tsp
   :type 'string)
 (defcustom tsp-tasks-list-buffer-name "*TSP Tasks*" "Name of the tasks list buffer"
   :group 'tsp
   :type 'string)
-(defcustom tsp-dired-cp-path-bin "cp" "Path of the copy executable"
+(defcustom tsp-dired-cp-program "cp" "Name of the copy program"
   :group 'tsp
   :type 'string)
-(defcustom tsp-dired-mv-path-bin "mv" "Path of the move executable"
+(defcustom tsp-dired-mv-program "mv" "Name of the move program"
   :group 'tsp
   :type 'string)
 
@@ -102,7 +105,7 @@
                  command))))))
 
 (defun tsp--tasks-list ()
-  (let* ((out (shell-command-to-string (s-concat tsp-bin-path " -l")))
+  (let* ((out (shell-command-to-string (s-concat tsp-program " -l")))
          (tbl (thread-last
                   (seq-rest (s-lines out))
                 (seq-remove 's-blank-str-p)
@@ -111,7 +114,7 @@
 
 (defun tsp--retry-task (command &optional label)
   (shell-command-to-string (format "%s%s %s"
-                                   tsp-bin-path
+                                   tsp-program
                                    (if (s-blank-str? label) "" (s-concat " -L " label))
                                    command)))
 
@@ -140,20 +143,20 @@
 
 (defun tsp-clear-finished-tasks ()
   (interactive)
-  (shell-command-to-string (s-concat tsp-bin-path " -c"))
+  (shell-command-to-string (s-concat tsp-program " -c"))
   (tsp--revert-tasks-list-when-existing))
 
 (defun tsp-remove-task ()
   (interactive)
   (let ((ids (seq-map 'car (tablist-get-marked-items))))
-    (seq-each (lambda (id) (shell-command-to-string (s-concat tsp-bin-path " -r " id)))
+    (seq-each (lambda (id) (shell-command-to-string (s-concat tsp-program " -r " id)))
               ids))
   (tsp--revert-tasks-list-when-existing))
 
 (defun tsp-kill-task-process ()
   (interactive)
   (let ((ids (seq-map 'car (tablist-get-marked-items))))
-    (seq-each (lambda (id) (shell-command-to-string (s-concat tsp-bin-path " -k " id)))
+    (seq-each (lambda (id) (shell-command-to-string (s-concat tsp-program " -k " id)))
               ids))
   (tsp--revert-tasks-list-when-existing))
 
@@ -161,29 +164,31 @@
   (interactive)
   (let ((ids (seq-map 'car (tablist-get-marked-items))))
     (seq-each (lambda (id) (when (string= "queued" (get-text-property 0 'state id))
-                             (shell-command-to-string (s-concat tsp-bin-path " -u " id))))
+                             (shell-command-to-string (s-concat tsp-program " -u " id))))
               ids))
   (tsp--revert-tasks-list-when-existing))
 
-(defun dired-tsp--copy-cmd (sources target)
-  (format "%s %s %s%s %s %s" tsp-bin-path "-L dired-tsp-copy" tsp-dired-cp-path-bin
-          (when (not dired-recursive-copies) "" " -r")
+(defun tsp--dired-copy-cmd (sources target)
+  (format "%s %s %s -v%s %s %s" tsp-program "-L tsp-dired-copy" tsp-dired-cp-program
+          (when (not dired-recursive-copies) "" "r")
           (s-join " " sources) target))
 
-(defun dired-tsp--move-cmd (sources target)
-  (format "%s %s %s %s %s" tsp-bin-path "-L dired-tsp-move" tsp-dired-mv-path-bin (s-join " " sources) target))
+(defun tsp--dired-move-cmd (sources target)
+  (format "%s %s %s %s %s" tsp-program "-L tsp-dired-move" tsp-dired-mv-program (s-join " " sources) target))
 
 ;;;###autoload
-(defun dired-tsp-do-copy (&optional arg)
+(defun tsp-dired-do-copy (&optional arg)
+  "Replacement for `dired-do-copy' but made async through `tsp'."
   (interactive "P")
-  (dired-tsp--do-op "Copy" 'copy 'dired-tsp--copy-cmd arg))
+  (tsp--dired-do-op "Copy" 'copy 'tsp--dired-copy-cmd arg))
 
 ;;;###autoload
-(defun dired-tsp-do-rename (&optional arg)
+(defun tsp-dired-do-rename (&optional arg)
+  "Replacement for `dired-do-rename' but made async through `tsp'."
   (interactive "P")
-  (dired-tsp--do-op "Rename" 'move 'dired-tsp--move-cmd arg))
+  (tsp--dired-do-op "Rename" 'move 'tsp--dired-move-cmd arg))
 
-(defun dired-tsp--do-op (op-name op-symbol op-fn &optional arg)
+(defun tsp--dired-do-op (op-name op-symbol op-fn &optional arg)
   (let* ((fn-list (dired-get-marked-files nil arg nil nil t))
          (rfn-list (mapcar #'dired-make-relative fn-list))
          (dired-one-file	; fluid variable inside dired-create-files
@@ -206,6 +211,26 @@
          (cmd (funcall op-fn rfn-list target)))
     (message "Enqueued %s in tsp: ID %s" op-name (shell-command-to-string cmd))
     (tsp--revert-tasks-list-when-existing)))
+
+;;;###autoload
+(defun tsp-dired-do-shell-command (command &optional arg file-list)
+  (interactive
+   (let ((files (dired-get-marked-files t current-prefix-arg nil nil t)))
+     (list
+      ;; Want to give feedback whether this file or marked files are used:
+      (dired-read-shell-command "! on %s: " current-prefix-arg files)
+      current-prefix-arg
+      files)))
+  (cl-letf (((symbol-function 'dired-run-shell-command)
+             (lambda (cmd)
+               (let ((cmds (s-split ";" cmd t)))
+                 (seq-each (lambda (c) (shell-command-to-string
+                                        (format "%s -L tsp-dired-run %s" tsp-program c)))
+                           cmds)
+                 (message "Enqueued %d jobs in tsp" (length cmds)))
+               ;; Return nil for sake of nconc in dired-bunch-files.
+               nil)))
+    (dired-do-shell-command (s-replace-regexp " ?;?&;?$" "" command) arg file-list)))
 
 (defun tsp--tasks-list-refresh ()
     (setq tabulated-list-entries (tsp--tasks-list)))
@@ -240,6 +265,7 @@
 
 ;;;###autoload
 (defun tsp-list-tasks ()
+  "Displays the current tsp job queue."
   (interactive)
   (switch-to-buffer tsp-tasks-list-buffer-name)
   (tsp-mode))
