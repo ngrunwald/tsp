@@ -157,12 +157,12 @@
 
 (defvar tsp-mode-map
   (let ((map (make-sparse-keymap)))
-    (define-key map [r] 'tsp-retry-task)
-    (define-key map [d] 'tsp-remove-task)
-    (define-key map [k] 'tsp-kill-task-process)
-    (define-key map [c] 'tsp-clear-finished-tasks)
-    (define-key map [f]'tsp-find-output)
-    (define-key map [U] 'tsp-make-task-urgent)
+    (define-key map (kbd "r") 'tsp-retry-task)
+    (define-key map (kbd "d") 'tsp-remove-task)
+    (define-key map (kbd "k") 'tsp-kill-task-process)
+    (define-key map (kbd "c") 'tsp-clear-finished-tasks)
+    (define-key map (kbd "f") 'tsp-find-output)
+    (define-key map (kbd "U") 'tsp-make-task-urgent)
     map)
   "Keymap for `tsp-mode'")
 
