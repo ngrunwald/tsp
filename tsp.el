@@ -158,11 +158,11 @@
 (defvar tsp-mode-map
   (let ((map (make-sparse-keymap)))
     (define-key map (kbd "r") 'tsp-retry-task)
-    (define-key map (kbd "d") 'tsp-remove-task)
-    (define-key map (kbd "k") 'tsp-kill-task-process)
+    (define-key map (kbd "K") 'tsp-kill-task-process)
+    (define-key map (kbd "k") 'tsp-remove-task)
     (define-key map (kbd "c") 'tsp-clear-finished-tasks)
     (define-key map (kbd "f") 'tsp-find-output)
-    (define-key map (kbd "U") 'tsp-make-task-urgent)
+    (define-key map (kbd "p") 'tsp-make-task-urgent)
     map)
   "Keymap for `tsp-mode'")
 
@@ -180,6 +180,7 @@
   (add-hook 'tabulated-list-revert-hook 'tsp--tasks-list-refresh nil t)
   (tabulated-list-init-header)
   (tablist-minor-mode)
+  (local-set-key [remap tablist-do-kill-lines] 'tsp-kill-task-process)
   (tablist-revert))
 
 ;;;###autoload
