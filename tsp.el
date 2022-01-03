@@ -40,19 +40,17 @@
 (require 'cl-lib)
 
 (defgroup tsp nil
-  "tsp customization group.")
+  "tsp customization group."
+  :prefix "tsp-"
+  :group 'external)
 
 (defcustom tsp-program "tsp" "Name of the tsp program"
-  :group 'tsp
   :type 'string)
 (defcustom tsp-tasks-list-buffer-name "*TSP Tasks*" "Name of the tasks list buffer"
-  :group 'tsp
   :type 'string)
 (defcustom tsp-dired-cp-program "cp" "Name of the copy program"
-  :group 'tsp
   :type 'string)
 (defcustom tsp-dired-mv-program "mv" "Name of the move program"
-  :group 'tsp
   :type 'string)
 
 (defun tsp--parse-raw-command (s)
@@ -153,6 +151,45 @@
               ids))
   (tsp--revert-tasks-list-when-existing))
 
+(defun tsp--task-info (arg)
+  (let ((id (or arg (tabulated-list-get-id))))
+    (when id
+      (let* ((raw (shell-command-to-string (format "%s -i %s" tsp-program id)))
+             (data (thread-last raw
+                     (s-lines)
+                     (seq-remove 's-blank-str?)
+                     (seq-map (lambda (l) (s-split ": " l t)))))
+             (pid (when (string= "running" (get-text-property 0 'state id))
+                    (shell-command-to-string (format "%s -p %s" tsp-program id))))
+             (rtime (get-text-property 0 'rtime id))
+             (utime (get-text-property 0 'utime id))
+             (output (get-text-property 0 'output id)))
+        (when  output
+            (push (list "Output file" output) data))
+        (when rtime
+          (push (list "Real time" (format "%ss" rtime)) data))
+        (when utime
+          (push (list "User time" (format "%ss" utime)) data))
+
+        (push (list "ID" id) data)
+        (when pid
+          (push (list "PID" pid) data))
+        data))))
+
+(defun tsp-task-info (&optional arg)
+  (interactive)
+  (let ((id (or arg (tabulated-list-get-id))))
+    (when id
+      (let* ((data (tsp--task-info id))
+             (content (thread-last data
+                        (seq-map (lambda (kv) (s-join ": " kv)))
+                        (seq-remove 's-blank-str?)
+                        (s-join "\n"))))
+        (switch-to-buffer "*TSP Info*")
+        (erase-buffer)
+        (insert content)
+        (view-mode)))))
+
 (defun tsp-kill-task-process ()
   (interactive)
   (let ((ids (seq-map 'car (tablist-get-marked-items))))
@@ -238,6 +275,7 @@
 (defvar tsp-mode-map
   (let ((map (make-sparse-keymap)))
     (define-key map (kbd "r") 'tsp-retry-task)
+    (define-key map (kbd "i") 'tsp-task-info)
     (define-key map (kbd "K") 'tsp-kill-task-process)
     (define-key map (kbd "k") 'tsp-remove-task)
     (define-key map (kbd "c") 'tsp-clear-finished-tasks)
