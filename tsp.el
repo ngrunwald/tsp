@@ -207,11 +207,12 @@
 
 (defun tsp--dired-copy-cmd (sources target)
   (format "%s %s %s -v%s %s %s" tsp-program "-L tsp-dired-copy" tsp-dired-cp-program
-          (when (not dired-recursive-copies) "" "r")
-          (s-join " " sources) target))
+          (if (not dired-recursive-copies) "" "r")
+          (s-join " " (seq-map 'shell-quote-argument sources)) (shell-quote-argument target)))
 
 (defun tsp--dired-move-cmd (sources target)
-  (format "%s %s %s %s %s" tsp-program "-L tsp-dired-move" tsp-dired-mv-program (s-join " " sources) target))
+  (format "%s %s %s %s %s" tsp-program "-L tsp-dired-move" tsp-dired-mv-program
+          (s-join " " (seq-map 'shell-quote-argument sources)) (shell-quote-argument target)))
 
 ;;;###autoload
 (defun tsp-dired-do-copy (&optional arg)
